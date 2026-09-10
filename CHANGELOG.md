@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed — audit Round 2
+- `tags.nr` — `TIER_1/2/3_PASS` removed. Nothing in the circuit bound the tag to
+  `w.tier`, so a low-tier holder could publish a high-tier tag. Tags are now
+  corridor category labels (`REMITTANCE` / `AID_DISBURSEMENT` / …) with no
+  attestation (audit R2-H1).
+- `conformance.nr` — explicit `PINNED_4` (statement message, arity 4) and
+  `PINNED_5` (auditor blob, arity 5) assertions; previously only arity 2 was
+  pinned in-circuit (audit R2-M6). 20 `nargo test`.
+
 ### Changed — Option B (issuer-signed statements)
 - **Rewrote the circuit**: replaced credential Merkle inclusion + revocation
   non-membership with a **Grumpkin Schnorr signature verification**

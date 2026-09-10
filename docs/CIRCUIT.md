@@ -11,7 +11,7 @@ Public inputs (order = the ABI in `corridor-contracts/ABI.md`), 9:
 | 1 | `min_tier` | u32 | corridor's minimum KYC tier |
 | 2 | `now` | u64 | current time (checked on Stellar against a tolerance) |
 | 3 | `nullifier` | Field | one-time-per-corridor tag |
-| 4 | `disclosed_tag` | u32 | bounded enum the holder chose to reveal |
+| 4 | `disclosed_tag` | u32 | corridor category label (`< 16`), holder-chosen — **not attested** |
 | 5 | `issuer_id` | Field | `Poseidon2(issuer_pk.x, issuer_pk.y)` (issuer is public by design) |
 | 6 | `min_cred_epoch` | u64 | corridor's bulk-revocation floor |
 | 7 | `auditor_pubkey` | Field | auditor key the blob binds to (`== policy.auditor_pubkey`; `0` = none) |
@@ -34,7 +34,10 @@ issuer_pk_y, sig_s_lo, sig_s_hi, sig_e_lo, sig_e_hi, auditor_nonce`.
 7. **Epoch floor.** `cred_epoch >= min_cred_epoch` — bulk revocation.
 8. **Nullifier.** `Poseidon2([holder_secret, corridor_id]) == nullifier`. Per
    corridor → two corridors get unlinkable nullifiers for the same holder.
-9. **Tag bound.** `disclosed_tag < MAX_TAG` (16) — an enum index, not free text.
+9. **Tag range.** `disclosed_tag < MAX_TAG` (16). This is the *only* constraint
+   on the tag — it is **not bound** to the credential, the holder, or the tier.
+   Treat `PassRecord.tag` as an app-chosen category label, never a verified
+   attribute (audit R2-H1).
 10. **Auditor binding.**
     `Poseidon2([auditor_pubkey, tier, issuer_id, nullifier, auditor_nonce]) == auditor_blob`,
     with `auditor_pubkey` a public input the Stellar contract pins to the

@@ -79,7 +79,8 @@ auditor_nonce`.
 6. `expiry > now`
 7. `cred_epoch >= min_cred_epoch` — bulk-revocation floor
 8. `nullifier == Poseidon2([holder_secret, corridor_id])` — per corridor, unlinkable
-9. `disclosed_tag < MAX_TAG` (16)
+9. `disclosed_tag < MAX_TAG` (16) — range only; the tag is a holder-chosen
+   category label, **not** bound to any attribute (audit R2-H1)
 10. `auditor_blob == Poseidon2([auditor_pubkey, tier, issuer_id, nullifier, auditor_nonce])`
 
 `issuer_id ∈ accepted_issuers` is checked **on Soroban** against the policy's
@@ -166,7 +167,7 @@ nothing verifies:
 
 | | Circuit | SDK | Soroban |
 |---|---|---|---|
-| **Poseidon2** (`poseidon2([1,2]) == 0x038682…1ed7383`) | `conformance.nr` (`noir-lang/poseidon`) | `poseidon.test.ts` (`@zkpassport/poseidon2`) | `poseidon_conformance` (`rs-soroban-poseidon`) |
+| **Poseidon2** — arities **2** (nullifier, issuer_id, holder_binding), **4** (statement message) and **5** (auditor blob) each pinned to a fixed value | `conformance.nr` (`noir-lang/poseidon`) | `poseidon.test.ts` (`@zkpassport/poseidon2`) | `poseidon_conformance` (`rs-soroban-poseidon`) |
 | **Grumpkin Schnorr** | `noir-lang/schnorr` v0.4.0 | `schnorr.ts` — pinned to that library's test vector | — (verified via the proof) |
 
 CI's `nargo execute` on the SDK-signed fixture is the end-to-end check that the
@@ -207,7 +208,7 @@ reward-eligible through the
 - `nargo test`, `nargo execute`, and `nargo fmt --check` must pass.
 - A public-input layout change is a coordinated PR with `corridor-contracts`
   (+ `ABI.md`) and `corridor-sdk`; regenerate the fixture.
-- Keep `conformance::PINNED` green and the Schnorr scheme matching `schnorr.ts`.
+- Keep `conformance::PINNED{,_4,_5}` green and the Schnorr scheme matching `schnorr.ts`.
 
 ## License
 
