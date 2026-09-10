@@ -1,0 +1,6 @@
+**/target
+*.gz
+*.json.witness
+.DS_Store
+Thumbs.db
+.idea/

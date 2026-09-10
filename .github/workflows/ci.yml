@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  circuit:
+    name: nargo check + test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: corridor_eligibility
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Noir
+        run: |
+          curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
+          echo "$HOME/.nargo/bin" >> "$GITHUB_PATH"
+      - run: noirup
+      - run: nargo check
+      - run: nargo test
