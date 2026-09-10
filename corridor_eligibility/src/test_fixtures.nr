@@ -23,7 +23,7 @@ pub fn good() -> (Public, Witness) {
     let tier: u32 = 3;
     let expiry: u64 = 9_000_000;
     let salt: Field = 42;
-    let auditor_pk: Field = 0;
+    let auditor_pubkey: Field = 0;
     let auditor_nonce: Field = 7;
 
     let c = Poseidon2::hash(
@@ -38,7 +38,7 @@ pub fn good() -> (Public, Witness) {
 
     let nullifier = Poseidon2::hash([holder_secret, corridor_id], 2);
     let auditor_blob = Poseidon2::hash(
-        [auditor_pk, tier as Field, issuer_id, nullifier, auditor_nonce],
+        [auditor_pubkey, tier as Field, issuer_id, nullifier, auditor_nonce],
         5,
     );
 
@@ -51,6 +51,7 @@ pub fn good() -> (Public, Witness) {
         nullifier,
         disclosed_tag: 2,
         issuer_id,
+        auditor_pubkey,
         auditor_blob,
     };
     let w = Witness {
@@ -65,7 +66,6 @@ pub fn good() -> (Public, Witness) {
         rev_low_next_value: 0,
         rev_low_siblings,
         rev_low_index_bits,
-        auditor_pk,
         auditor_nonce,
     };
     (p, w)

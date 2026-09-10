@@ -16,6 +16,9 @@ pub struct Public {
     pub nullifier: Field,
     pub disclosed_tag: u32,
     pub issuer_id: Field,
+    // the auditor key the blob is bound to — the Stellar contract checks this
+    // equals the corridor policy's `auditor_pubkey`.
+    pub auditor_pubkey: Field,
     pub auditor_blob: Field,
 }
 
@@ -34,7 +37,6 @@ pub struct Witness {
     pub rev_low_next_value: Field,
     pub rev_low_siblings: [Field; DEPTH],
     pub rev_low_index_bits: [bool; DEPTH],
-    pub auditor_pk: Field,
     pub auditor_nonce: Field,
 }
 
@@ -51,7 +53,7 @@ pub fn nullifier_of(secret: Field, corridor_id: Field) -> Field {
 
 pub fn auditor_blob_of(w: Witness, p: Public) -> Field {
     Poseidon2::hash(
-        [w.auditor_pk, w.tier as Field, p.issuer_id, p.nullifier, w.auditor_nonce],
+        [p.auditor_pubkey, w.tier as Field, p.issuer_id, p.nullifier, w.auditor_nonce],
         5,
     )
 }

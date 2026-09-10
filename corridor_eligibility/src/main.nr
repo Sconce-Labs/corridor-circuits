@@ -33,6 +33,7 @@ fn main(
     nullifier: pub Field,
     disclosed_tag: pub u32,
     issuer_id: pub Field,
+    auditor_pubkey: pub Field,
     auditor_blob: pub Field,
     // ── PRIVATE witness ──────────────────────────────────────────────────────
     holder_secret: Field,
@@ -46,7 +47,6 @@ fn main(
     rev_low_next_value: Field,
     rev_low_siblings: [Field; DEPTH],
     rev_low_index_bits: [bool; DEPTH],
-    auditor_pk: Field,
     auditor_nonce: Field,
 ) {
     eligibility::check(
@@ -59,6 +59,7 @@ fn main(
             nullifier,
             disclosed_tag,
             issuer_id,
+            auditor_pubkey,
             auditor_blob,
         },
         Witness {
@@ -73,7 +74,6 @@ fn main(
             rev_low_next_value,
             rev_low_siblings,
             rev_low_index_bits,
-            auditor_pk,
             auditor_nonce,
         },
     );
