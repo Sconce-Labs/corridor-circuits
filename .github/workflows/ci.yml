@@ -43,12 +43,12 @@ jobs:
       - name: Install Noir + Barretenberg
         run: |
           curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
-          curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/bbup/install | bash
           echo "$HOME/.nargo/bin" >> "$GITHUB_PATH"
-          echo "$HOME/.bb" >> "$GITHUB_PATH"
           "$HOME/.nargo/bin/noirup" --version "$NOIR_VERSION"
-          "$HOME/.bb/bbup" || true
-      - run: nargo execute corridor_eligibility
+          curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/refs/heads/next/barretenberg/bbup/install | bash
+          echo "$HOME/.bb" >> "$GITHUB_PATH"
+          "$HOME/.bb/bbup" -nv "$NOIR_VERSION" --no-modify-path
+      - run: nargo execute
       - name: Prove and verify (UltraHonk)
         run: |
           bb prove --scheme ultra_honk -b ./target/corridor_eligibility.json -w ./target/corridor_eligibility.gz -o ./target
