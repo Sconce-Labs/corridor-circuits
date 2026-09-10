@@ -1,8 +1,31 @@
-# Revocation: sparse Merkle tree vs. indexed Merkle tree
+# Revocation: indexed Merkle tree
 
-Tracks [#2](https://github.com/Sconce-Labs/corridor-circuits/issues/2).
+**As of the C1 fix, revocation is an indexed Merkle tree** (`src/imt.nr`). This
+document keeps the comparison for context; the SMT section describes the *old,
+unsound* approach.
 
-## Today — sparse Merkle tree (SMT)
+## Now — indexed Merkle tree (IMT)
+
+Leaves are `{ value, next_index, next_value }`, a sorted linked list by `value`;
+the tree is seeded with a sentinel `{0, 0, 0}`. The revocation key for a
+credential is `imtKey(Poseidon2(commitment))` (low 248 bits, order-comparable).
+
+- **Revoke:** insert the key as a new leaf, splicing the linked list.
+- **Prove non-revocation:** supply the *low leaf* `L` (largest `value < key`),
+  prove `L` is in the tree, and `L.value < key < L.next_value` (or `L` is the
+  tail). If the key is present, it *is* a leaf, so no low leaf satisfies
+  `L.value < key` — the proof fails (`"credential revoked"`).
+
+No truncation collisions matter: the IMT stores the actual keys sorted, and a
+248-bit-key collision (≈ n²/2^249) is a *liveness* issue (over-revocation), never
+soundness. Cost: one Merkle inclusion path + two 248-bit range checks.
+
+Tracks [#2](https://github.com/Sconce-Labs/corridor-circuits/issues/2) (the
+Compact-side implementation — blocked on `corridor/docs/CREDENTIAL_ACCUMULATOR.md`).
+
+---
+
+## Old — sparse Merkle tree (SMT) — UNSOUND, removed
 
 - Fixed depth 32. Empty leaf value = `0`.
 - A credential `c` maps to slot `low_bits(Poseidon2(c))` (low 32 bits).
