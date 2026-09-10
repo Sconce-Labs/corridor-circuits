@@ -106,6 +106,18 @@ fn nullifier_is_deterministic() {
     assert(a == b);
 }
 
+// Cross-implementation conformance anchor. This exact value must also be
+// produced by the SDK (`@zkpassport/poseidon2`) and Soroban's
+// `poseidon2_permutation`-based hash. If any of the three drift, the Merkle
+// roots computed on Midnight, in this circuit, and checked on Stellar stop
+// agreeing. See corridor-contracts/ABI.md "Hash conformance".
+#[test]
+fn poseidon2_hash_1_2_matches_the_pinned_vector() {
+    let h: Field = Poseidon2::hash([1, 2], 2);
+    // 32-byte canonical form; also asserted in corridor-sdk and (M3) corridor-contracts.
+    assert(h == 0x038682aa1cb5ae4e0a3f13da432a95c77c5c111f6f030faf9cad641ce1ed7383);
+}
+
 #[test]
 fn merkle_root_from_empty_path_folds_manually() {
     let leaf: Field = 7;
