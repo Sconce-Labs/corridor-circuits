@@ -1,60 +1,55 @@
-# Revocation: indexed Merkle tree
+# Revocation
 
-**As of the C1 fix, revocation is an indexed Merkle tree** (`src/imt.nr`). This
-document keeps the comparison for context; the SMT section describes the *old,
-unsound* approach.
+**Option B has no revocation accumulator in this circuit.** Revocation is
+handled two ways, both outside the circuit's Merkle machinery (which was
+removed):
 
-## Now — indexed Merkle tree (IMT)
+## 1. Short expiry (primary)
 
-Leaves are `{ value, next_index, next_value }`, a sorted linked list by `value`;
-the tree is seeded with a sentinel `{0, 0, 0}`. The revocation key for a
-credential is `imtKey(Poseidon2(commitment))` (low 248 bits, order-comparable).
+The circuit enforces `expiry > now`. Issuer statements are signed with a short
+`expiry` (days). To revoke an individual holder, the issuer simply stops
+re-signing. Zero on-chain revocation infrastructure.
 
-- **Revoke:** insert the key as a new leaf, splicing the linked list.
-- **Prove non-revocation:** supply the *low leaf* `L` (largest `value < key`),
-  prove `L` is in the tree, and `L.value < key < L.next_value` (or `L` is the
-  tail). If the key is present, it *is* a leaf, so no low leaf satisfies
-  `L.value < key` — the proof fails (`"credential revoked"`).
+## 2. Epoch floor (bulk)
 
-No truncation collisions matter: the IMT stores the actual keys sorted, and a
-248-bit-key collision (≈ n²/2^249) is a *liveness* issue (over-revocation), never
-soundness. Cost: one Merkle inclusion path + two 248-bit range checks.
+Every statement carries a `cred_epoch`. The circuit enforces
+`cred_epoch >= min_cred_epoch`, where `min_cred_epoch` is a public input the
+Stellar contract binds to the corridor's policy.
 
-Tracks [#2](https://github.com/Sconce-Labs/corridor-circuits/issues/2) (the
-Compact-side implementation — blocked on `corridor/docs/CREDENTIAL_ACCUMULATOR.md`).
+- The issuer publishes a higher epoch on Midnight
+  (`corridor.compact.bumpEpoch`).
+- Corridor operators raise their policy floor on Stellar
+  (`corridor_registry.set_min_cred_epoch`, monotonic).
+- Every statement signed under an older epoch stops verifying.
+
+This is a blunt instrument (it revokes a whole cohort), which is why short
+expiry is primary.
+
+## 3. Targeted revocation (designed, deferred)
+
+A small **indexed Merkle tree on Stellar** (BN254/Poseidon2, same field as the
+circuit) keyed by `Poseidon2(holder_binding)` or a per-statement id, with a
+low-leaf non-membership proof added to the circuit. Not built — short expiry
+covers the pilot. Design notes:
+
+- Leaves `{ value, next_index, next_value }`, sorted linked list, sentinel
+  `{0,0,0}`.
+- Revoke = insert the key. Prove non-revocation = supply the low leaf `L`,
+  prove `L` in the tree and `L.value < key < L.next_value` (or `L` is the tail).
+- The tree lives in a Soroban contract so there is no cross-chain sync — one
+  field, one chain.
+
+Tracked at [#2](https://github.com/Sconce-Labs/corridor-circuits/issues/2).
 
 ---
 
-## Old — sparse Merkle tree (SMT) — UNSOUND, removed
+## History
 
-- Fixed depth 32. Empty leaf value = `0`.
-- A credential `c` maps to slot `low_bits(Poseidon2(c))` (low 32 bits).
-- **Revoke:** issuer sets `revoked[slot] = 1` on Midnight.
-- **Prove non-revocation:** show a Merkle path from `0` at `slot` to
-  `revocation_root`. The slot is derived from `c` in-circuit, so it can't be
-  swapped.
-
-**Pros:** trivial to implement, O(depth) proof, matches the credential tree.
-**Cons:**
-- The 32-bit truncation means two distinct credentials can collide onto the
-  same slot. At testnet scale (hundreds of credentials) `P(collision)` is
-  ~2⁻²³ per pair — negligible, but not zero, and it grows with volume.
-- A collision would let a revoked credential's slot be "un-revoked" by a
-  colliding non-revoked one, or vice versa.
-
-## Alternative — indexed Merkle tree (IMT)
-
-Leaves are `(value, next_value, next_index)` sorted by `value`. Non-membership
-of `x` is a **range proof**: show the leaf `l` with `l.value < x < l.next_value`.
-
-**Pros:** no truncation, no collision, membership and non-membership share one
-structure, widely used (Aztec, Semaphore v4).
-**Cons:** more circuit logic (sorted-linked-list invariants), inserts touch two
-leaves, needs an off-chain tree builder that matches the Compact contract.
-
-## Recommendation
-
-Ship the SMT for testnet + the pilot. Move to an IMT before mainnet, or before
-a single corridor's credential count approaches ~2¹⁶. The circuit's
-`root_from` / `low_bits` are already isolated in `merkle.nr`, so the swap is
-contained.
+Earlier designs used a credential Merkle tree on Midnight with the root synced
+to Stellar, and a revocation tree (first a sparse Merkle tree, then an indexed
+Merkle tree). The audit found the sync could not work — Midnight is BLS12-381,
+the circuit and Stellar are BN254, so the roots are values in different fields —
+and that the sparse-tree check was a no-op. Option B removed all of it. See
+[corridor/AUDIT.md](https://github.com/Sconce-Labs/corridor/blob/main/AUDIT.md)
+C1/C4 and the IMT code in this repo's git history if targeted revocation is
+revived.

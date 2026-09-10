@@ -1,25 +1,28 @@
 # Benchmarks
 
-`nargo info` on `1.0.0-beta.26`, `noir-lang/poseidon` v0.3.0, `DEPTH = 32`.
+`nargo info` on `1.0.0-beta.26`, `noir-lang/poseidon` v0.3.0,
+`noir-lang/schnorr` v0.4.0.
 
 | Function | ACIR opcodes | Brillig opcodes |
 |----------|-------------:|----------------:|
-| `main` | ~3200 | 34 |
+| `main` | 73 | (see CI) |
 
-Dominated by the depth-32 Poseidon2 Merkle folds (credential inclusion + the
-indexed-Merkle-tree low-leaf inclusion) and the 254-bit `to_le_bits`
-decompositions in `lt_248` (two per proof) and `key_of` (one). The jump from
-~1536 came with the C1 fix (real indexed-Merkle-tree non-membership replacing
-the no-op sparse check).
+Dominated by the Grumpkin Schnorr `verify_signature` (one embedded-curve scalar
+mul + a Poseidon2 challenge) plus a handful of Poseidon2 hashes (holder
+binding, statement, issuer id, nullifier, auditor blob).
 
-Regenerate: `make info` (or `cd corridor_eligibility && nargo info`). CI prints
-this on every run.
+The earlier Merkle-inclusion design (credential path + indexed-Merkle-tree
+low-leaf non-membership, `DEPTH = 32`) was **~3200 ACIR opcodes**. Option B —
+issuer-signed statements, no Merkle path — cut that by ~40×.
+
+Regenerate: `cd corridor_eligibility && nargo info`. CI prints this on every
+run.
 
 ## Levers if proving cost matters
 
-- Reduce `DEPTH` if a corridor's credential count is small (the tree depth is
-  the same on Midnight, so this is a cross-repo change).
-- The revocation `to_le_bits(254)` can shrink to `to_le_bits(DEPTH + margin)`
-  once we bound the field range — small saving.
-- An indexed Merkle tree (`docs/REVOCATION.md`) trades the slot decomposition
-  for a range proof; roughly neutral on gates, better on soundness.
+At 73 opcodes there is little to squeeze. If it ever matters:
+
+- The 128-bit limb splitting of `s` / `e` is fixed by the `noir-lang/schnorr`
+  ABI — not tunable here.
+- Batching multiple corridor entries into one proof (shared signature check,
+  N nullifiers) would amortise the scalar mul.
