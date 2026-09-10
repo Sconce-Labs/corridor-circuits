@@ -24,10 +24,10 @@ pub fn good() -> (Public, Witness) {
         salt: 0x2a,
         issuer_pk_x: 0x1c1974f0de00e2bbf79dc3b76164a6476a23de544638863f536545803279ce99,
         issuer_pk_y: 0x78f104556f81bbaeb10af70dc148131744ee4d68c1afe54dd5ca250215a11d9,
-        sig_s_lo: 0x78948a5e3268c6d594c1eff8481e0e7b,
-        sig_s_hi: 0x5be4f3ace9abfbcde83d66c0e2241d,
-        sig_e_lo: 0x3159db0c6b36decd56df06245a9098c1,
-        sig_e_hi: 0x1486e55e574f3fa3e91bcb2d586df4b8,
+        sig_s_lo: 0xf54f0f244cfa9a773af5ef416da423f5,
+        sig_s_hi: 0x2bcbb5cdf867c08a07300687affed17d,
+        sig_e_lo: 0xa3f9d0fe043241b7ed189090973f12c4,
+        sig_e_hi: 0x9082d032bd304fcbe6ff514f8f6853b,
         auditor_nonce: 0x4d,
     };
     (p, w)
