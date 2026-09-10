@@ -17,7 +17,7 @@ jobs:
       run:
         working-directory: corridor_eligibility
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Noir ${{ env.NOIR_VERSION }}
         run: |
           curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
@@ -39,7 +39,7 @@ jobs:
       run:
         working-directory: corridor_eligibility
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Noir + Barretenberg
         run: |
           curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
