@@ -10,34 +10,16 @@
 //!   7. the auditor blob binds {tier, issuer, nullifier} under the auditor key
 //!
 //! The PUBLIC input order below is an ABI shared with `corridor-contracts`
-//! (`PI_CREDENTIAL_ROOT = 0`, …). Changing the order here means changing the
-//! `PI_*` constants and `ABI.md` there in the same coordinated PR.
+//! (`PI_CREDENTIAL_ROOT = 0`, …). Changing the order means changing the `PI_*`
+//! constants and `ABI.md` there in the same coordinated PR.
 
-use poseidon::poseidon2::Poseidon2;
+mod merkle;
+mod eligibility;
+mod test_fixtures;
+mod conformance;
 
-global DEPTH: u32 = 32;
-global MAX_TAG: u32 = 16;
-/// Convention: an unfilled leaf in the revocation tree holds this value.
-global EMPTY_LEAF: Field = 0;
-
-fn hash2(a: Field, b: Field) -> Field {
-    Poseidon2::hash([a, b], 2)
-}
-
-/// Recompute a Merkle root from a leaf, its sibling co-path, and the
-/// left/right direction bits (bit = false → our node is the left child).
-fn merkle_root_from(leaf: Field, siblings: [Field; DEPTH], index_bits: [bool; DEPTH]) -> Field {
-    let mut node = leaf;
-    for i in 0..DEPTH {
-        let (l, r) = if index_bits[i] {
-            (siblings[i], node)
-        } else {
-            (node, siblings[i])
-        };
-        node = hash2(l, r);
-    }
-    node
-}
+use eligibility::{Public, Witness};
+use merkle::DEPTH;
 
 fn main(
     // ── PUBLIC — order must match corridor-contracts PI_* ─────────────────────
@@ -61,78 +43,28 @@ fn main(
     auditor_pk: Field,
     auditor_nonce: Field,
 ) {
-    // 1. reconstruct the credential commitment
-    let commitment =
-        Poseidon2::hash([holder_secret, tier as Field, expiry as Field, issuer_id, salt], 5);
-
-    // 2. credential inclusion under the issued-set root
-    let cred_root = merkle_root_from(commitment, cred_siblings, cred_index_bits);
-    assert(cred_root == credential_root, "credential not in issued set");
-
-    // 3. revocation NON-membership: the sparse slot keyed by this commitment is
-    //    still empty. The slot index is the low DEPTH bits of Poseidon2(commitment),
-    //    bound here so a prover cannot substitute a different empty slot.
-    let rev_slot = Poseidon2::hash([commitment], 1);
-    let slot_bits: [bool; 254] = rev_slot.to_le_bits();
-    let mut rev_index_bits: [bool; DEPTH] = [false; DEPTH];
-    for i in 0..DEPTH {
-        rev_index_bits[i] = slot_bits[i];
-    }
-    let rev_root = merkle_root_from(EMPTY_LEAF, rev_siblings, rev_index_bits);
-    assert(rev_root == revocation_root, "credential revoked");
-
-    // 4. tier threshold
-    assert(tier >= min_tier, "tier below corridor minimum");
-
-    // 5. expiry
-    assert(expiry > now, "credential expired");
-
-    // 6. per-corridor nullifier
-    let expected_nullifier = Poseidon2::hash([holder_secret, corridor_id], 2);
-    assert(expected_nullifier == nullifier, "bad nullifier");
-
-    // 7. disclosed tag is a bounded enum index (not free text)
-    assert(disclosed_tag < MAX_TAG, "tag out of range");
-
-    // 8. auditor blob binds the warrant-relevant fields under the auditor key.
-    //    MVP: a hiding commitment. A later milestone swaps this for in-circuit
-    //    ECIES so the auditor can actually decrypt {tier, issuer_id} for a
-    //    flagged nullifier.
-    let expected_blob =
-        Poseidon2::hash([auditor_pk, tier as Field, issuer_id, nullifier, auditor_nonce], 5);
-    assert(expected_blob == auditor_blob, "auditor blob mismatch");
-}
-
-#[test]
-fn nullifier_is_deterministic() {
-    let a = Poseidon2::hash([1, 2], 2);
-    let b = Poseidon2::hash([1, 2], 2);
-    assert(a == b);
-}
-
-// Cross-implementation conformance anchor. This exact value must also be
-// produced by the SDK (`@zkpassport/poseidon2`) and Soroban's
-// `poseidon2_permutation`-based hash. If any of the three drift, the Merkle
-// roots computed on Midnight, in this circuit, and checked on Stellar stop
-// agreeing. See corridor-contracts/ABI.md "Hash conformance".
-#[test]
-fn poseidon2_hash_1_2_matches_the_pinned_vector() {
-    let h: Field = Poseidon2::hash([1, 2], 2);
-    // 32-byte canonical form; also asserted in corridor-sdk and (M3) corridor-contracts.
-    assert(h == 0x038682aa1cb5ae4e0a3f13da432a95c77c5c111f6f030faf9cad641ce1ed7383);
-}
-
-#[test]
-fn merkle_root_from_empty_path_folds_manually() {
-    let leaf: Field = 7;
-    let mut sib: [Field; DEPTH] = [0; DEPTH];
-    sib[0] = 9;
-    let bits: [bool; DEPTH] = [false; DEPTH];
-    let root = merkle_root_from(leaf, sib, bits);
-
-    let mut node = Poseidon2::hash([7, 9], 2);
-    for _ in 1..DEPTH {
-        node = Poseidon2::hash([node, 0], 2);
-    }
-    assert(root == node);
+    eligibility::check(
+        Public {
+            credential_root,
+            revocation_root,
+            corridor_id,
+            min_tier,
+            now,
+            nullifier,
+            disclosed_tag,
+            issuer_id,
+            auditor_blob,
+        },
+        Witness {
+            holder_secret,
+            tier,
+            expiry,
+            salt,
+            cred_siblings,
+            cred_index_bits,
+            rev_siblings,
+            auditor_pk,
+            auditor_nonce,
+        },
+    );
 }
