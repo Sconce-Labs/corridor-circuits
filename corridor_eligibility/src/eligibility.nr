@@ -139,3 +139,33 @@ fn nullifier_is_unlinkable_across_corridors() {
     let n_b = nullifier_of(w.holder_secret, p.corridor_id + 1);
     assert(n_a != n_b);
 }
+
+#[test]
+fn commitment_is_deterministic_and_holder_specific() {
+    let (p, w) = crate::test_fixtures::good();
+    let c1 = commitment(p, w);
+    let c2 = commitment(p, w);
+    assert(c1 == c2);
+
+    let mut w2 = w;
+    w2.holder_secret = w.holder_secret + 1;
+    assert(commitment(p, w2) != c1);
+}
+
+#[test]
+fn auditor_blob_binds_to_the_nullifier() {
+    let (p, w) = crate::test_fixtures::good();
+    let mut p2 = p;
+    p2.nullifier = p.nullifier + 1;
+    // a different nullifier ⇒ a different blob, so the pass can't be lifted
+    assert(auditor_blob_of(w, p2) != auditor_blob_of(w, p));
+}
+
+#[test(should_fail_with = "credential revoked")]
+fn rejects_when_the_commitment_slot_is_marked_revoked() {
+    let (mut p, mut w) = crate::test_fixtures::good();
+    // Put a non-zero node on the revocation co-path at level 0 → the empty-leaf
+    // fold no longer reaches revocation_root.
+    w.rev_siblings[0] = 1;
+    check(p, w);
+}
