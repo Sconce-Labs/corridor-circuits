@@ -1,13 +1,18 @@
 //! Corridor eligibility circuit.
 //!
 //! Proves, without revealing the holder or their attributes, that:
-//!   1. the holder owns a credential in the issuer set  (Merkle inclusion)
-//!   2. that credential is not revoked                  (sparse-Merkle non-membership)
+//!   1. the holder owns a credential in the issuer set   (Merkle inclusion)
+//!   2. that credential is not revoked                   (indexed-Merkle-tree non-membership)
 //!   3. its tier meets the corridor minimum
 //!   4. it has not expired
-//!   5. the per-corridor nullifier is correctly derived (unlinkable across corridors)
+//!   5. the per-corridor nullifier is correctly derived  (unlinkable across corridors)
 //!   6. the disclosed tag is a bounded enum index
-//!   7. the auditor blob binds {tier, issuer, nullifier} under the auditor key
+//!   7. the auditor blob binds {tier, issuer, nullifier} under the policy's auditor key
+//!
+//! SECURITY: `holder_secret` is load-bearing for both hiding (it blinds the
+//! commitment) and unlinkability (the nullifier is `Poseidon2(secret,
+//! corridor_id)`). A low-entropy secret is grindable — the issuer/wallet MUST
+//! generate it with a CSPRNG (`corridor-sdk` exports `randomSecret()` for this).
 //!
 //! The PUBLIC input order below is an ABI shared with `corridor-contracts`
 //! (`PI_CREDENTIAL_ROOT = 0`, …). Changing the order means changing the `PI_*`
