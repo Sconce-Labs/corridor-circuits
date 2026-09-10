@@ -1,0 +1,141 @@
+//! The eligibility check, factored out of `main` so it can be unit-tested with
+//! good and bad witnesses.
+
+use crate::merkle::{DEPTH, EMPTY_LEAF, low_bits, root_from};
+use poseidon::poseidon2::Poseidon2;
+
+pub global MAX_TAG: u32 = 16;
+
+pub struct Public {
+    pub credential_root: Field,
+    pub revocation_root: Field,
+    pub corridor_id: Field,
+    pub min_tier: u32,
+    pub now: u64,
+    pub nullifier: Field,
+    pub disclosed_tag: u32,
+    pub issuer_id: Field,
+    pub auditor_blob: Field,
+}
+
+pub struct Witness {
+    pub holder_secret: Field,
+    pub tier: u32,
+    pub expiry: u64,
+    pub salt: Field,
+    pub cred_siblings: [Field; DEPTH],
+    pub cred_index_bits: [bool; DEPTH],
+    pub rev_siblings: [Field; DEPTH],
+    pub auditor_pk: Field,
+    pub auditor_nonce: Field,
+}
+
+pub fn commitment(p: Public, w: Witness) -> Field {
+    Poseidon2::hash(
+        [w.holder_secret, w.tier as Field, w.expiry as Field, p.issuer_id, w.salt],
+        5,
+    )
+}
+
+pub fn nullifier_of(secret: Field, corridor_id: Field) -> Field {
+    Poseidon2::hash([secret, corridor_id], 2)
+}
+
+pub fn auditor_blob_of(w: Witness, p: Public) -> Field {
+    Poseidon2::hash(
+        [w.auditor_pk, w.tier as Field, p.issuer_id, p.nullifier, w.auditor_nonce],
+        5,
+    )
+}
+
+/// All eight constraints. Panics (fails the proof) on any violation.
+pub fn check(p: Public, w: Witness) {
+    let c = commitment(p, w);
+
+    // 1/2. credential inclusion
+    let cred_root = root_from(c, w.cred_siblings, w.cred_index_bits);
+    assert(cred_root == p.credential_root, "credential not in issued set");
+
+    // 3. revocation non-membership at the commitment-bound sparse slot
+    let rev_slot = Poseidon2::hash([c], 1);
+    let rev_root = root_from(EMPTY_LEAF, w.rev_siblings, low_bits(rev_slot));
+    assert(rev_root == p.revocation_root, "credential revoked");
+
+    // 4/5. tier + expiry
+    assert(w.tier >= p.min_tier, "tier below corridor minimum");
+    assert(w.expiry > p.now, "credential expired");
+
+    // 6. per-corridor nullifier
+    assert(nullifier_of(w.holder_secret, p.corridor_id) == p.nullifier, "bad nullifier");
+
+    // 7. bounded disclosure tag
+    assert(p.disclosed_tag < MAX_TAG, "tag out of range");
+
+    // 8. auditor blob binding
+    assert(auditor_blob_of(w, p) == p.auditor_blob, "auditor blob mismatch");
+}
+
+// ── tests ────────────────────────────────────────────────────────────────────
+
+#[test]
+fn accepts_a_well_formed_witness() {
+    let (p, w) = crate::test_fixtures::good();
+    check(p, w);
+}
+
+#[test(should_fail_with = "credential not in issued set")]
+fn rejects_wrong_credential_root() {
+    let (mut p, w) = crate::test_fixtures::good();
+    p.credential_root = p.credential_root + 1;
+    check(p, w);
+}
+
+#[test(should_fail_with = "credential revoked")]
+fn rejects_wrong_revocation_root() {
+    let (mut p, w) = crate::test_fixtures::good();
+    p.revocation_root = p.revocation_root + 1;
+    check(p, w);
+}
+
+#[test(should_fail_with = "tier below corridor minimum")]
+fn rejects_tier_below_minimum() {
+    let (mut p, w) = crate::test_fixtures::good();
+    p.min_tier = w.tier + 1;
+    check(p, w);
+}
+
+#[test(should_fail_with = "credential expired")]
+fn rejects_expired_credential() {
+    let (mut p, w) = crate::test_fixtures::good();
+    p.now = w.expiry;
+    check(p, w);
+}
+
+#[test(should_fail_with = "bad nullifier")]
+fn rejects_wrong_nullifier() {
+    let (mut p, w) = crate::test_fixtures::good();
+    p.nullifier = p.nullifier + 1;
+    check(p, w);
+}
+
+#[test(should_fail_with = "tag out of range")]
+fn rejects_out_of_range_tag() {
+    let (mut p, w) = crate::test_fixtures::good();
+    p.disclosed_tag = MAX_TAG;
+    check(p, w);
+}
+
+#[test(should_fail_with = "auditor blob mismatch")]
+fn rejects_wrong_auditor_blob() {
+    let (mut p, w) = crate::test_fixtures::good();
+    p.auditor_blob = p.auditor_blob + 1;
+    check(p, w);
+}
+
+#[test]
+fn nullifier_is_unlinkable_across_corridors() {
+    let (p, w) = crate::test_fixtures::good();
+    let n_a = nullifier_of(w.holder_secret, p.corridor_id);
+    let n_b = nullifier_of(w.holder_secret, p.corridor_id + 1);
+    assert(n_a != n_b);
+}
