@@ -1,23 +1,31 @@
-//! The eligibility check, factored out of `main` so it can be unit-tested with
-//! good and bad witnesses.
+//! The eligibility check under the **issuer-signed statement** model
+//! (corridor/docs/CREDENTIAL_ACCUMULATOR.md, Option B).
+//!
+//! There is no credential Merkle tree. A regulated issuer, after running KYC
+//! once, signs `{ holder_binding, tier, expiry, cred_epoch }` with a Grumpkin
+//! Schnorr key. The holder proves knowledge of a valid signature plus the
+//! per-corridor predicates. Revocation is short `expiry` + the issuer bumping
+//! `min_cred_epoch` (bulk); targeted revocation is a later add-on.
 
-use crate::imt::{assert_non_membership, key_of, LowLeaf};
-use crate::merkle::{DEPTH, root_from};
 use poseidon::poseidon2::Poseidon2;
+use schnorr::verify_signature;
+use std::embedded_curve_ops::{EmbeddedCurvePoint, EmbeddedCurveScalar};
 
 pub global MAX_TAG: u32 = 16;
 
 pub struct Public {
-    pub credential_root: Field,
-    pub revocation_root: Field,
     pub corridor_id: Field,
     pub min_tier: u32,
     pub now: u64,
     pub nullifier: Field,
     pub disclosed_tag: u32,
+    /// `Poseidon2(issuer_pk.x, issuer_pk.y)` — the corridor policy's
+    /// `accepted_issuers` are these ids.
     pub issuer_id: Field,
-    // the auditor key the blob is bound to — the Stellar contract checks this
-    // equals the corridor policy's `auditor_pubkey`.
+    /// Bulk-revocation floor, from the policy: credentials with a lower
+    /// `cred_epoch` are rejected.
+    pub min_cred_epoch: u64,
+    /// Auditor key the blob binds to (`== policy.auditor_pubkey`; `0` = none).
     pub auditor_pubkey: Field,
     pub auditor_blob: Field,
 }
@@ -26,29 +34,38 @@ pub struct Witness {
     pub holder_secret: Field,
     pub tier: u32,
     pub expiry: u64,
+    pub cred_epoch: u64,
     pub salt: Field,
-    // credential inclusion path
-    pub cred_siblings: [Field; DEPTH],
-    pub cred_index_bits: [bool; DEPTH],
-    // revocation NON-membership: the indexed-Merkle-tree low leaf for this
-    // credential's revocation key, and its inclusion path.
-    pub rev_low_value: Field,
-    pub rev_low_next_index: Field,
-    pub rev_low_next_value: Field,
-    pub rev_low_siblings: [Field; DEPTH],
-    pub rev_low_index_bits: [bool; DEPTH],
+    // issuer Schnorr public key (Grumpkin point)
+    pub issuer_pk_x: Field,
+    pub issuer_pk_y: Field,
+    // issuer signature over the statement: (s, e) as 128-bit limb pairs
+    pub sig_s_lo: Field,
+    pub sig_s_hi: Field,
+    pub sig_e_lo: Field,
+    pub sig_e_hi: Field,
     pub auditor_nonce: Field,
 }
 
-pub fn commitment(p: Public, w: Witness) -> Field {
+/// The holder-hiding binding the issuer signs over.
+pub fn holder_binding(w: Witness) -> Field {
+    Poseidon2::hash([w.holder_secret, w.salt], 2)
+}
+
+/// The exact message the issuer's Schnorr signature covers.
+pub fn statement_message(w: Witness) -> Field {
     Poseidon2::hash(
-        [w.holder_secret, w.tier as Field, w.expiry as Field, p.issuer_id, w.salt],
-        5,
+        [holder_binding(w), w.tier as Field, w.expiry as Field, w.cred_epoch as Field],
+        4,
     )
 }
 
 pub fn nullifier_of(secret: Field, corridor_id: Field) -> Field {
     Poseidon2::hash([secret, corridor_id], 2)
+}
+
+pub fn issuer_id_of(pk_x: Field, pk_y: Field) -> Field {
+    Poseidon2::hash([pk_x, pk_y], 2)
 }
 
 pub fn auditor_blob_of(w: Witness, p: Public) -> Field {
@@ -58,32 +75,25 @@ pub fn auditor_blob_of(w: Witness, p: Public) -> Field {
     )
 }
 
-/// All eight constraints. Panics (fails the proof) on any violation.
+/// All constraints. Panics (fails the proof) on any violation.
 pub fn check(p: Public, w: Witness) {
-    let c = commitment(p, w);
-
-    // 1/2. credential inclusion
-    let cred_root = root_from(c, w.cred_siblings, w.cred_index_bits);
-    assert(cred_root == p.credential_root, "credential not in issued set");
-
-    // 3. revocation NON-membership — the revocation key `Poseidon2(commitment)`
-    //    (truncated to 248 bits) is absent from the indexed Merkle tree.
-    let rev_key = key_of(Poseidon2::hash([c], 1));
-    assert_non_membership(
-        rev_key,
-        LowLeaf {
-            value: w.rev_low_value,
-            next_index: w.rev_low_next_index,
-            next_value: w.rev_low_next_value,
-        },
-        w.rev_low_siblings,
-        w.rev_low_index_bits,
-        p.revocation_root,
+    // 1. the issuer signed this exact credential statement
+    let pk = EmbeddedCurvePoint::new(w.issuer_pk_x, w.issuer_pk_y);
+    let sig = (
+        EmbeddedCurveScalar::new(w.sig_s_lo, w.sig_s_hi),
+        EmbeddedCurveScalar::new(w.sig_e_lo, w.sig_e_hi),
     );
+    assert(verify_signature(pk, sig, statement_message(w)), "bad issuer signature");
 
-    // 4/5. tier + expiry
+    // 2. the public issuer id is this key (so the corridor's allowlist check bites)
+    assert(issuer_id_of(w.issuer_pk_x, w.issuer_pk_y) == p.issuer_id, "issuer id mismatch");
+
+    // 3/4. tier + expiry
     assert(w.tier >= p.min_tier, "tier below corridor minimum");
     assert(w.expiry > p.now, "credential expired");
+
+    // 5. bulk revocation
+    assert(w.cred_epoch >= p.min_cred_epoch, "credential epoch revoked");
 
     // 6. per-corridor nullifier
     assert(nullifier_of(w.holder_secret, p.corridor_id) == p.nullifier, "bad nullifier");
@@ -95,120 +105,112 @@ pub fn check(p: Public, w: Witness) {
     assert(auditor_blob_of(w, p) == p.auditor_blob, "auditor blob mismatch");
 }
 
-// ── tests ────────────────────────────────────────────────────────────────────
+mod fixture;
 
-#[test]
-fn accepts_a_well_formed_witness() {
-    let (p, w) = crate::test_fixtures::good();
-    check(p, w);
-}
+mod tests {
+    use crate::eligibility::fixture::good;
+    use super::{auditor_blob_of, check, issuer_id_of, nullifier_of, statement_message};
 
-#[test(should_fail_with = "credential not in issued set")]
-fn rejects_wrong_credential_root() {
-    let (mut p, w) = crate::test_fixtures::good();
-    p.credential_root = p.credential_root + 1;
-    check(p, w);
-}
+    #[test]
+    fn accepts_a_well_formed_witness() {
+        let (p, w) = good();
+        check(p, w);
+    }
 
-#[test(should_fail_with = "revocation proof: bad low-leaf path")]
-fn rejects_wrong_revocation_root() {
-    let (mut p, w) = crate::test_fixtures::good();
-    p.revocation_root = p.revocation_root + 1;
-    check(p, w);
-}
+    #[test(should_fail_with = "bad issuer signature")]
+    fn rejects_a_forged_signature() {
+        let (p, mut w) = good();
+        w.sig_s_lo += 1;
+        check(p, w);
+    }
 
-#[test(should_fail_with = "tier below corridor minimum")]
-fn rejects_tier_below_minimum() {
-    let (mut p, w) = crate::test_fixtures::good();
-    p.min_tier = w.tier + 1;
-    check(p, w);
-}
+    #[test(should_fail_with = "bad issuer signature")]
+    fn rejects_a_tampered_statement() {
+        let (p, mut w) = good();
+        w.tier += 1; // signature no longer covers this tier
+        check(p, w);
+    }
 
-#[test(should_fail_with = "credential expired")]
-fn rejects_expired_credential() {
-    let (mut p, w) = crate::test_fixtures::good();
-    p.now = w.expiry;
-    check(p, w);
-}
+    #[test(should_fail_with = "issuer id mismatch")]
+    fn rejects_a_public_issuer_id_that_is_not_the_key() {
+        let (mut p, w) = good();
+        p.issuer_id += 1;
+        check(p, w);
+    }
 
-#[test(should_fail_with = "bad nullifier")]
-fn rejects_wrong_nullifier() {
-    let (mut p, w) = crate::test_fixtures::good();
-    p.nullifier = p.nullifier + 1;
-    check(p, w);
-}
+    #[test(should_fail_with = "tier below corridor minimum")]
+    fn rejects_tier_below_minimum() {
+        let (mut p, w) = good();
+        p.min_tier = w.tier + 1;
+        check(p, w);
+    }
 
-#[test(should_fail_with = "tag out of range")]
-fn rejects_out_of_range_tag() {
-    let (mut p, w) = crate::test_fixtures::good();
-    p.disclosed_tag = MAX_TAG;
-    check(p, w);
-}
+    #[test(should_fail_with = "credential expired")]
+    fn rejects_expired_credential() {
+        let (mut p, w) = good();
+        p.now = w.expiry;
+        check(p, w);
+    }
 
-#[test(should_fail_with = "auditor blob mismatch")]
-fn rejects_wrong_auditor_blob() {
-    let (mut p, w) = crate::test_fixtures::good();
-    p.auditor_blob = p.auditor_blob + 1;
-    check(p, w);
-}
+    #[test(should_fail_with = "credential epoch revoked")]
+    fn rejects_a_bulk_revoked_epoch() {
+        let (mut p, w) = good();
+        p.min_cred_epoch = w.cred_epoch + 1;
+        check(p, w);
+    }
 
-#[test]
-fn nullifier_is_unlinkable_across_corridors() {
-    let (p, w) = crate::test_fixtures::good();
-    let n_a = nullifier_of(w.holder_secret, p.corridor_id);
-    let n_b = nullifier_of(w.holder_secret, p.corridor_id + 1);
-    assert(n_a != n_b);
-}
+    #[test(should_fail_with = "bad nullifier")]
+    fn rejects_wrong_nullifier() {
+        let (mut p, w) = good();
+        p.nullifier += 1;
+        check(p, w);
+    }
 
-#[test]
-fn commitment_is_deterministic_and_holder_specific() {
-    let (p, w) = crate::test_fixtures::good();
-    let c1 = commitment(p, w);
-    let c2 = commitment(p, w);
-    assert(c1 == c2);
+    #[test(should_fail_with = "tag out of range")]
+    fn rejects_out_of_range_tag() {
+        let (mut p, w) = good();
+        p.disclosed_tag = super::MAX_TAG;
+        check(p, w);
+    }
 
-    let mut w2 = w;
-    w2.holder_secret = w.holder_secret + 1;
-    assert(commitment(p, w2) != c1);
-}
+    #[test(should_fail_with = "auditor blob mismatch")]
+    fn rejects_wrong_auditor_blob() {
+        let (mut p, w) = good();
+        p.auditor_blob += 1;
+        check(p, w);
+    }
 
-#[test]
-fn auditor_blob_binds_to_the_nullifier() {
-    let (p, w) = crate::test_fixtures::good();
-    let mut p2 = p;
-    p2.nullifier = p.nullifier + 1;
-    // a different nullifier ⇒ a different blob, so the pass can't be lifted
-    assert(auditor_blob_of(w, p2) != auditor_blob_of(w, p));
-}
+    #[test]
+    fn nullifier_is_unlinkable_across_corridors() {
+        let (p, w) = good();
+        assert(
+            nullifier_of(w.holder_secret, p.corridor_id)
+                != nullifier_of(w.holder_secret, p.corridor_id + 1),
+        );
+    }
 
-#[test(should_fail_with = "credential revoked")]
-fn rejects_a_revoked_credential() {
-    // Build a revocation IMT whose low leaf for this credential's key has
-    // `value == key` — i.e. the credential IS in the revoked set.
-    let (mut p, mut w) = crate::test_fixtures::good();
-    let c = commitment(p, w);
-    let key = crate::imt::key_of(poseidon::poseidon2::Poseidon2::hash([c], 1));
-    let sibs: [Field; crate::merkle::DEPTH] = [0; crate::merkle::DEPTH];
-    let bits: [bool; crate::merkle::DEPTH] = [false; crate::merkle::DEPTH];
-    let revoked_leaf = crate::imt::LowLeaf { value: key, next_index: 0, next_value: 0 };
-    p.revocation_root = crate::merkle::root_from(crate::imt::leaf_hash(revoked_leaf), sibs, bits);
-    w.rev_low_value = key;
-    w.rev_low_next_index = 0;
-    w.rev_low_next_value = 0;
-    check(p, w);
-}
+    #[test]
+    fn issuer_id_binds_both_coordinates() {
+        let (_, w) = good();
+        assert(
+            issuer_id_of(w.issuer_pk_x, w.issuer_pk_y)
+                != issuer_id_of(w.issuer_pk_y, w.issuer_pk_x),
+        );
+    }
 
-#[test(should_fail_with = "credential revoked")]
-fn rejects_key_above_the_low_leaf_range() {
-    // low leaf {10, 0, 20} but the real key is > 20 and not the tail → the
-    // holder is lying about which low leaf applies.
-    let (mut p, mut w) = crate::test_fixtures::good();
-    let sibs: [Field; crate::merkle::DEPTH] = [0; crate::merkle::DEPTH];
-    let bits: [bool; crate::merkle::DEPTH] = [false; crate::merkle::DEPTH];
-    let low = crate::imt::LowLeaf { value: 10, next_index: 1, next_value: 20 };
-    p.revocation_root = crate::merkle::root_from(crate::imt::leaf_hash(low), sibs, bits);
-    w.rev_low_value = 10;
-    w.rev_low_next_index = 1;
-    w.rev_low_next_value = 20;
-    check(p, w);
+    #[test]
+    fn statement_message_changes_with_epoch() {
+        let (_, w) = good();
+        let mut w2 = w;
+        w2.cred_epoch += 1;
+        assert(statement_message(w) != statement_message(w2));
+    }
+
+    #[test]
+    fn auditor_blob_binds_to_the_nullifier() {
+        let (p, w) = good();
+        let mut p2 = p;
+        p2.nullifier += 1;
+        assert(auditor_blob_of(w, p2) != auditor_blob_of(w, p));
+    }
 }

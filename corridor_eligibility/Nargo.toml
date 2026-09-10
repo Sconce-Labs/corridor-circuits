@@ -4,7 +4,10 @@ type = "bin"
 authors = ["Sconce Labs"]
 
 [dependencies]
-# Poseidon2 over BN254. This permutation must match Soroban's
-# `poseidon2_permutation` host function and the Compact tree hashing — see the
-# conformance test tracked in the roadmap (correctness gate).
+# Poseidon2 over BN254. Must match Soroban's `poseidon2_permutation` host
+# function and the SDK (`@zkpassport/poseidon2`) — pinned by `conformance.nr`.
 poseidon = { tag = "v0.3.0", git = "https://github.com/noir-lang/poseidon" }
+# Schnorr over Grumpkin with a Poseidon2 challenge. The issuer signs a
+# credential statement with this scheme; the SDK's signer mirrors the same DST
+# and generator (see corridor-sdk/src/schnorr.ts).
+schnorr = { tag = "v0.4.0", git = "https://github.com/noir-lang/schnorr" }
