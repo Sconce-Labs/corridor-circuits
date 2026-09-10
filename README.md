@@ -11,11 +11,15 @@ they may enter a **Corridor** payment corridor, without revealing who they are.
 
 ## What it proves
 
-See the doc comment at the top of
-[`corridor_eligibility/src/main.nr`](./corridor_eligibility/src/main.nr).
 In one line: *"I hold an unexpired, unrevoked credential of tier ≥ N issued by
 an accepted issuer, and here is a per-corridor nullifier that can't be linked
 to my other corridors."*
+
+Full constraint list — credential Merkle inclusion, revocation
+non-membership (commitment-bound sparse-tree slot), tier threshold, expiry,
+per-corridor nullifier `Poseidon2(secret, corridorId)`, bounded disclosure tag,
+auditor-blob binding — is in the doc comment at the top of
+[`corridor_eligibility/src/main.nr`](./corridor_eligibility/src/main.nr).
 
 ## Public-input ABI
 
@@ -51,16 +55,23 @@ bb write_vk -b ./target/corridor_eligibility.json -o ./target
 # (corridor-contracts, milestone M3).
 ```
 
-Built and tested against **Noir `1.0.0-beta.26`** (`nargo check` + `nargo test`
-green in CI). Poseidon2 from `noir-lang/poseidon` `v0.3.0`.
+Built and tested against **Noir `1.0.0-beta.26`** (`nargo check` + `nargo test`,
+3 tests, green in CI). Poseidon2 from `noir-lang/poseidon` `v0.3.0`.
+
+## Poseidon2 conformance
+
+`poseidon2([1, 2]) == 0x038682aa1cb5ae4e0a3f13da432a95c77c5c111f6f030faf9cad641ce1ed7383`
+is asserted here (`poseidon2_hash_1_2_matches_the_pinned_vector`), in
+`corridor-sdk` (`@zkpassport/poseidon2`), and in
+`corridor-contracts/crates/poseidon_conformance` (`stellar/rs-soroban-poseidon`).
+Circuit ⇄ SDK ⇄ Soroban agree. The **Midnight** side (`corridor.compact` tree
+hashing) still needs the same check — M4.
 
 ## Known gaps
 
-- Real Merkle fixtures + a witness builder; `Prover.toml` here is shape-only.
-- **Poseidon2 conformance** — confirm `noir-lang/poseidon` v0.3.0's permutation
-  is byte-identical to Soroban's `poseidon2_permutation` host function and the
-  Compact tree hashing. Until that test exists, the cross-chain Merkle roots are
-  assumed-equal, not proven-equal. **Correctness gate before the real verifier.**
+- Real Merkle fixtures; `Prover.toml` here is shape-only. The SDK's
+  `buildWitness` already assembles a valid witness — wire it to a fixture
+  generator.
 - `auditor_blob` is a hiding commitment, not real encryption yet — replace with
   in-circuit ECIES so a warranted auditor can decrypt (`{tier, issuer}` for a
   flagged nullifier).

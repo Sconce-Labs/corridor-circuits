@@ -25,3 +25,5 @@ jobs:
           "$HOME/.nargo/bin/noirup" --version "$NOIR_VERSION"
       - run: nargo check
       - run: nargo test
+      - name: Witness-solve the committed fixture (every constraint)
+        run: nargo execute

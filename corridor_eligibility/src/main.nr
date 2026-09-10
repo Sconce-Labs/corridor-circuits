@@ -70,10 +70,14 @@ fn main(
     assert(cred_root == credential_root, "credential not in issued set");
 
     // 3. revocation NON-membership: the sparse slot keyed by this commitment is
-    //    still empty. The slot index is bound to the commitment so a prover
-    //    cannot substitute a different empty slot.
+    //    still empty. The slot index is the low DEPTH bits of Poseidon2(commitment),
+    //    bound here so a prover cannot substitute a different empty slot.
     let rev_slot = Poseidon2::hash([commitment], 1);
-    let rev_index_bits: [bool; DEPTH] = rev_slot.to_le_bits();
+    let slot_bits: [bool; 254] = rev_slot.to_le_bits();
+    let mut rev_index_bits: [bool; DEPTH] = [false; DEPTH];
+    for i in 0..DEPTH {
+        rev_index_bits[i] = slot_bits[i];
+    }
     let rev_root = merkle_root_from(EMPTY_LEAF, rev_siblings, rev_index_bits);
     assert(rev_root == revocation_root, "credential revoked");
 
