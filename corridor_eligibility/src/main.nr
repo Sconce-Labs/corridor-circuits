@@ -15,6 +15,7 @@
 
 mod merkle;
 mod eligibility;
+mod tags;
 mod test_fixtures;
 mod conformance;
 
