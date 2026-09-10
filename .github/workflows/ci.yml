@@ -11,7 +11,7 @@ env:
 
 jobs:
   circuit:
-    name: nargo check + test
+    name: check + fmt + test + execute
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -23,7 +23,34 @@ jobs:
           curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
           echo "$HOME/.nargo/bin" >> "$GITHUB_PATH"
           "$HOME/.nargo/bin/noirup" --version "$NOIR_VERSION"
+      - run: nargo fmt --check
       - run: nargo check
       - run: nargo test
-      - name: Witness-solve the committed fixture (every constraint)
+      - name: Witness-solve the committed fixture
         run: nargo execute
+      - name: Gate count
+        run: nargo info
+
+  prove:
+    name: bb prove + verify
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: corridor_eligibility
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Noir + Barretenberg
+        run: |
+          curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
+          curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/bbup/install | bash
+          echo "$HOME/.nargo/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.bb" >> "$GITHUB_PATH"
+          "$HOME/.nargo/bin/noirup" --version "$NOIR_VERSION"
+          "$HOME/.bb/bbup" || true
+      - run: nargo execute corridor_eligibility
+      - name: Prove and verify (UltraHonk)
+        run: |
+          bb prove --scheme ultra_honk -b ./target/corridor_eligibility.json -w ./target/corridor_eligibility.gz -o ./target
+          bb write_vk --scheme ultra_honk -b ./target/corridor_eligibility.json -o ./target
+          bb verify --scheme ultra_honk -k ./target/vk -p ./target/proof
