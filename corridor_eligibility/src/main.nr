@@ -14,6 +14,7 @@
 //! constants and `ABI.md` there in the same coordinated PR.
 
 mod merkle;
+mod imt;
 mod eligibility;
 mod tags;
 mod test_fixtures;
@@ -40,7 +41,11 @@ fn main(
     salt: Field,
     cred_siblings: [Field; DEPTH],
     cred_index_bits: [bool; DEPTH],
-    rev_siblings: [Field; DEPTH],
+    rev_low_value: Field,
+    rev_low_next_index: Field,
+    rev_low_next_value: Field,
+    rev_low_siblings: [Field; DEPTH],
+    rev_low_index_bits: [bool; DEPTH],
     auditor_pk: Field,
     auditor_nonce: Field,
 ) {
@@ -63,7 +68,11 @@ fn main(
             salt,
             cred_siblings,
             cred_index_bits,
-            rev_siblings,
+            rev_low_value,
+            rev_low_next_index,
+            rev_low_next_value,
+            rev_low_siblings,
+            rev_low_index_bits,
             auditor_pk,
             auditor_nonce,
         },

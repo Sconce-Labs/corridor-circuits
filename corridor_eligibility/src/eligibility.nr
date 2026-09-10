@@ -1,7 +1,8 @@
 //! The eligibility check, factored out of `main` so it can be unit-tested with
 //! good and bad witnesses.
 
-use crate::merkle::{DEPTH, EMPTY_LEAF, low_bits, root_from};
+use crate::imt::{assert_non_membership, key_of, LowLeaf};
+use crate::merkle::{DEPTH, root_from};
 use poseidon::poseidon2::Poseidon2;
 
 pub global MAX_TAG: u32 = 16;
@@ -23,9 +24,16 @@ pub struct Witness {
     pub tier: u32,
     pub expiry: u64,
     pub salt: Field,
+    // credential inclusion path
     pub cred_siblings: [Field; DEPTH],
     pub cred_index_bits: [bool; DEPTH],
-    pub rev_siblings: [Field; DEPTH],
+    // revocation NON-membership: the indexed-Merkle-tree low leaf for this
+    // credential's revocation key, and its inclusion path.
+    pub rev_low_value: Field,
+    pub rev_low_next_index: Field,
+    pub rev_low_next_value: Field,
+    pub rev_low_siblings: [Field; DEPTH],
+    pub rev_low_index_bits: [bool; DEPTH],
     pub auditor_pk: Field,
     pub auditor_nonce: Field,
 }
@@ -56,10 +64,20 @@ pub fn check(p: Public, w: Witness) {
     let cred_root = root_from(c, w.cred_siblings, w.cred_index_bits);
     assert(cred_root == p.credential_root, "credential not in issued set");
 
-    // 3. revocation non-membership at the commitment-bound sparse slot
-    let rev_slot = Poseidon2::hash([c], 1);
-    let rev_root = root_from(EMPTY_LEAF, w.rev_siblings, low_bits(rev_slot));
-    assert(rev_root == p.revocation_root, "credential revoked");
+    // 3. revocation NON-membership — the revocation key `Poseidon2(commitment)`
+    //    (truncated to 248 bits) is absent from the indexed Merkle tree.
+    let rev_key = key_of(Poseidon2::hash([c], 1));
+    assert_non_membership(
+        rev_key,
+        LowLeaf {
+            value: w.rev_low_value,
+            next_index: w.rev_low_next_index,
+            next_value: w.rev_low_next_value,
+        },
+        w.rev_low_siblings,
+        w.rev_low_index_bits,
+        p.revocation_root,
+    );
 
     // 4/5. tier + expiry
     assert(w.tier >= p.min_tier, "tier below corridor minimum");
@@ -90,7 +108,7 @@ fn rejects_wrong_credential_root() {
     check(p, w);
 }
 
-#[test(should_fail_with = "credential revoked")]
+#[test(should_fail_with = "revocation proof: bad low-leaf path")]
 fn rejects_wrong_revocation_root() {
     let (mut p, w) = crate::test_fixtures::good();
     p.revocation_root = p.revocation_root + 1;
@@ -162,10 +180,33 @@ fn auditor_blob_binds_to_the_nullifier() {
 }
 
 #[test(should_fail_with = "credential revoked")]
-fn rejects_when_the_commitment_slot_is_marked_revoked() {
+fn rejects_a_revoked_credential() {
+    // Build a revocation IMT whose low leaf for this credential's key has
+    // `value == key` — i.e. the credential IS in the revoked set.
     let (mut p, mut w) = crate::test_fixtures::good();
-    // Put a non-zero node on the revocation co-path at level 0 → the empty-leaf
-    // fold no longer reaches revocation_root.
-    w.rev_siblings[0] = 1;
+    let c = commitment(p, w);
+    let key = crate::imt::key_of(poseidon::poseidon2::Poseidon2::hash([c], 1));
+    let sibs: [Field; crate::merkle::DEPTH] = [0; crate::merkle::DEPTH];
+    let bits: [bool; crate::merkle::DEPTH] = [false; crate::merkle::DEPTH];
+    let revoked_leaf = crate::imt::LowLeaf { value: key, next_index: 0, next_value: 0 };
+    p.revocation_root = crate::merkle::root_from(crate::imt::leaf_hash(revoked_leaf), sibs, bits);
+    w.rev_low_value = key;
+    w.rev_low_next_index = 0;
+    w.rev_low_next_value = 0;
+    check(p, w);
+}
+
+#[test(should_fail_with = "credential revoked")]
+fn rejects_key_above_the_low_leaf_range() {
+    // low leaf {10, 0, 20} but the real key is > 20 and not the tail → the
+    // holder is lying about which low leaf applies.
+    let (mut p, mut w) = crate::test_fixtures::good();
+    let sibs: [Field; crate::merkle::DEPTH] = [0; crate::merkle::DEPTH];
+    let bits: [bool; crate::merkle::DEPTH] = [false; crate::merkle::DEPTH];
+    let low = crate::imt::LowLeaf { value: 10, next_index: 1, next_value: 20 };
+    p.revocation_root = crate::merkle::root_from(crate::imt::leaf_hash(low), sibs, bits);
+    w.rev_low_value = 10;
+    w.rev_low_next_index = 1;
+    w.rev_low_next_value = 20;
     check(p, w);
 }
