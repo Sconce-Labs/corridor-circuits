@@ -1,6 +1,8 @@
 **/target
 *.gz
 *.json.witness
+*.proof
+vk
 .DS_Store
 Thumbs.db
 .idea/
