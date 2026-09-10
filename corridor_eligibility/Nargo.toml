@@ -2,8 +2,9 @@
 name = "corridor_eligibility"
 type = "bin"
 authors = ["Sconce Labs"]
-compiler_version = ">=1.0.0"
 
 [dependencies]
-# Poseidon2 hashing over the BN254 field, matching the Soroban host function.
-poseidon = { tag = "v0.1.0", git = "https://github.com/noir-lang/poseidon" }
+# Poseidon2 over BN254. This permutation must match Soroban's
+# `poseidon2_permutation` host function and the Compact tree hashing — see the
+# conformance test tracked in the roadmap (correctness gate).
+poseidon = { tag = "v0.3.0", git = "https://github.com/noir-lang/poseidon" }

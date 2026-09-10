@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  NOIR_VERSION: "1.0.0-beta.26"
+
 jobs:
   circuit:
     name: nargo check + test
@@ -15,10 +18,10 @@ jobs:
         working-directory: corridor_eligibility
     steps:
       - uses: actions/checkout@v4
-      - name: Install Noir
+      - name: Install Noir ${{ env.NOIR_VERSION }}
         run: |
           curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
           echo "$HOME/.nargo/bin" >> "$GITHUB_PATH"
-      - run: noirup
+          "$HOME/.nargo/bin/noirup" --version "$NOIR_VERSION"
       - run: nargo check
       - run: nargo test

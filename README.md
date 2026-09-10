@@ -51,13 +51,16 @@ bb write_vk -b ./target/corridor_eligibility.json -o ./target
 # (corridor-contracts, milestone M3).
 ```
 
+Built and tested against **Noir `1.0.0-beta.26`** (`nargo check` + `nargo test`
+green in CI). Poseidon2 from `noir-lang/poseidon` `v0.3.0`.
+
 ## Known gaps
 
 - Real Merkle fixtures + a witness builder; `Prover.toml` here is shape-only.
-- The `poseidon` dependency `tag` in `Nargo.toml` is a placeholder — pin to the
-  version whose permutation matches Soroban's `poseidon2_permutation` host
-  function exactly, or the Merkle roots won't agree across chains. **Correctness
-  gate.**
+- **Poseidon2 conformance** — confirm `noir-lang/poseidon` v0.3.0's permutation
+  is byte-identical to Soroban's `poseidon2_permutation` host function and the
+  Compact tree hashing. Until that test exists, the cross-chain Merkle roots are
+  assumed-equal, not proven-equal. **Correctness gate before the real verifier.**
 - `auditor_blob` is a hiding commitment, not real encryption yet — replace with
   in-circuit ECIES so a warranted auditor can decrypt (`{tier, issuer}` for a
   flagged nullifier).
