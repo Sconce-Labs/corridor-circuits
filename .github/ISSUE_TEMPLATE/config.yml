@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Project overview & architecture
+    url: https://github.com/Sconce-Labs/corridor
+    about: Start here for the big picture, the roadmap, and the audit log.

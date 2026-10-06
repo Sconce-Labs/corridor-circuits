@@ -1,0 +1,38 @@
+name: Task / improvement
+description: A scoped piece of work (a good Wave issue is completable in about a day)
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: The outcome, not the implementation. Link related issues/PRs.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Concrete, checkable conditions for "done". A PR closing this must satisfy each.
+      placeholder: |
+        - [ ] `cargo test --workspace` green with the new case
+        - [ ] README section updated
+    validations:
+      required: true
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Complexity (maintainer may adjust)
+      options:
+        - trivial (small fix / copy / doc)
+        - medium (standard feature or involved bug fix)
+        - high (complex feature, refactor, or new integration)
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Pointers
+      description: Files, functions, prior art, gotchas. Help the next person start fast.
+    validations:
+      required: false
