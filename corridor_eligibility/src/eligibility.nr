@@ -19,7 +19,7 @@ pub struct Public {
     pub now: u64,
     pub nullifier: Field,
     pub disclosed_tag: u32,
-    /// `Poseidon2(issuer_pk.x, issuer_pk.y)` — the corridor policy's
+    /// `Poseidon2(issuer_pk.x, issuer_pk.y)` -- the corridor policy's
     /// `accepted_issuers` are these ids.
     pub issuer_id: Field,
     /// Bulk-revocation floor, from the policy: credentials with a lower
@@ -78,7 +78,10 @@ pub fn auditor_blob_of(w: Witness, p: Public) -> Field {
 /// All constraints. Panics (fails the proof) on any violation.
 pub fn check(p: Public, w: Witness) {
     // 1. the issuer signed this exact credential statement
-    let pk = EmbeddedCurvePoint::new(w.issuer_pk_x, w.issuer_pk_y);
+    // Noir 1.0.0-beta.9 has no `EmbeddedCurvePoint::new`; construct directly.
+    // (`is_infinite: false` is checked against the curve equation below, and
+    // `verify_signature` rejects the point at infinity.)
+    let pk = EmbeddedCurvePoint { x: w.issuer_pk_x, y: w.issuer_pk_y, is_infinite: false };
     let sig = (
         EmbeddedCurveScalar::new(w.sig_s_lo, w.sig_s_hi),
         EmbeddedCurveScalar::new(w.sig_e_lo, w.sig_e_hi),
@@ -105,7 +108,7 @@ pub fn check(p: Public, w: Witness) {
     assert(auditor_blob_of(w, p) == p.auditor_blob, "auditor blob mismatch");
 }
 
-mod fixture;
+pub mod fixture;
 
 mod tests {
     use crate::eligibility::fixture::good;

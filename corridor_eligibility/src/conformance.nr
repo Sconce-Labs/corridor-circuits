@@ -5,9 +5,9 @@
 //! issuer signature, nullifier and auditor blob computed here and re-derived
 //! elsewhere stop agreeing. The circuit uses these arities:
 //!
-//!   * 2 — `holder_binding`, `issuer_id`, `nullifier`
-//!   * 4 — `statement_message` (the signed message)
-//!   * 5 — `auditor_blob`
+//!   * 2 -- `holder_binding`, `issuer_id`, `nullifier`
+//!   * 4 -- `statement_message` (the signed message)
+//!   * 5 -- `auditor_blob`
 //!
 //! so all three are pinned below. See corridor-contracts/ABI.md "Hash
 //! conformance"; the identical values are asserted in

@@ -1,8 +1,8 @@
-//! Disclosure tag — a bounded **category label** for the corridor, chosen by
+//! Disclosure tag -- a bounded **category label** for the corridor, chosen by
 //! the holder's app and published in the `PassRecord`.
 //!
 //! IMPORTANT: the circuit only range-checks the tag (`< MAX_TAG`). It carries
-//! **no attestation** — it is not bound to the credential, the holder, or the
+//! **no attestation** -- it is not bound to the credential, the holder, or the
 //! tier. Do not read `PassRecord.tag` as a verified attribute; it is a
 //! convenience label for filtering/analytics. (Audit R2-H1: the earlier
 //! `TIER_*_PASS` values were removed because nothing bound them to `w.tier`,

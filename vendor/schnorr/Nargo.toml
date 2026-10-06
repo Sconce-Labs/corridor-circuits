@@ -1,0 +1,12 @@
+# VENDORED from noir-lang/schnorr v0.4.0 (commit 9995bcc45e24c9eaccabe3bcf59c36f9aedaa00c).
+# Local change: poseidon retagged v0.3.0 -> v0.2.6 (v0.3.0 uses post-beta.9 syntax).
+# Poseidon2 outputs at arities 1/2/4/5 are pinned identical by
+# corridor_eligibility's conformance.nr tests.
+[package]
+name = "schnorr"
+type = "lib"
+authors = [""]
+compiler_version = ">=1.0.0"
+
+[dependencies]
+poseidon = { git = "https://github.com/noir-lang/poseidon", tag = "v0.2.6" }
