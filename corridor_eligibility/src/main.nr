@@ -1,4 +1,4 @@
-//! Corridor eligibility circuit — issuer-signed statement model
+//! Corridor eligibility circuit -- issuer-signed statement model
 //! (corridor/docs/CREDENTIAL_ACCUMULATOR.md, Option B).
 //!
 //! Proves, without revealing the holder or their attributes, that:
@@ -12,7 +12,7 @@
 //!   8. the auditor blob binds {tier, issuer, nullifier} under the policy's auditor key
 //!
 //! SECURITY: `holder_secret` blinds the commitment and derives the nullifier
-//! (`Poseidon2(secret, corridor_id)`). A low-entropy secret is grindable — the
+//! (`Poseidon2(secret, corridor_id)`). A low-entropy secret is grindable -- the
 //! issuer/wallet MUST generate it with a CSPRNG (`corridor-sdk` `randomSecret()`).
 //!
 //! The PUBLIC input order below is an ABI shared with `corridor-contracts`
@@ -26,7 +26,7 @@ mod conformance;
 use eligibility::{Public, Witness};
 
 fn main(
-    // ── PUBLIC — order must match corridor-contracts PI_* ─────────────────────
+    // -- PUBLIC -- order must match corridor-contracts PI_* ---------------------
     corridor_id: pub Field,
     min_tier: pub u32,
     now: pub u64,
@@ -36,7 +36,7 @@ fn main(
     min_cred_epoch: pub u64,
     auditor_pubkey: pub Field,
     auditor_blob: pub Field,
-    // ── PRIVATE witness ──────────────────────────────────────────────────────
+    // -- PRIVATE witness ------------------------------------------------------
     holder_secret: Field,
     tier: u32,
     expiry: u64,

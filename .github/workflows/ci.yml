@@ -7,9 +7,13 @@ on:
     branches: [main]
 
 env:
-  NOIR_VERSION: "1.0.0-beta.26"
-  # bb-versions.json has no entry past beta.22 yet; pin the matching bb by hand.
-  BB_VERSION: "5.0.0-nightly.20260522"
+  # The load-bearing pin: corridor-contracts' on-chain verifier (vendored
+  # ultrahonk-rust-verifier core) targets Barretenberg 0.87.0 / UltraKeccakFlavor,
+  # which pairs with Noir 1.0.0-beta.9. A mismatch is NOT caught by length
+  # checks -- it silently fails at transcript/pairing (see corridor-contracts
+  # HANDOFF.md §5 #12). Keep these two in lockstep with the verifier.
+  NOIR_VERSION: "1.0.0-beta.9"
+  BB_VERSION: "0.87.0"
 
 jobs:
   circuit:
@@ -50,16 +54,13 @@ jobs:
           echo "$HOME/.bb" >> "$GITHUB_PATH"
           "$HOME/.bb/bbup" -v "$BB_VERSION" --no-modify-path
       - run: nargo execute
-      - name: Prove and verify (UltraHonk, best-effort)
+      - name: Prove and verify (UltraHonk)
+        # Version-matched nargo/bb (0.87.0 pairs with 1.0.0-beta.9), so this is
+        # a hard gate, not a smoke test: any prove/verify failure must turn the
+        # build red. bb 0.87.0 shells out to `jq` for ACIR JSON parsing
+        # (preinstalled on ubuntu-latest).
         run: |
-          # bb is an unreleased nightly and beta.26 has no published bb mapping,
-          # so a tooling break here is a warning, not a red build. A real proof
-          # failure would still show in the log.
-          set +e
-          bb prove    --scheme ultra_honk -b ./target/corridor_eligibility.json -w ./target/corridor_eligibility.gz -o ./target
-          bb write_vk --scheme ultra_honk -b ./target/corridor_eligibility.json -o ./target
-          bb verify   --scheme ultra_honk -k ./target/vk -p ./target/proof -i ./target/public_inputs
-          rc=$?
-          [ $rc -eq 0 ] && echo "proof verified" \
-            || echo "::warning::bb prove/verify smoke failed (rc=$rc) — nightly bb vs $NOIR_VERSION nargo"
-          exit 0
+          bb write_vk --scheme ultra_honk --oracle_hash keccak --bytecode_path ./target/corridor_eligibility.json --output_path ./target --output_format bytes_and_fields
+          bb prove    --scheme ultra_honk --oracle_hash keccak --bytecode_path ./target/corridor_eligibility.json --witness_path ./target/corridor_eligibility.gz --output_path ./target --output_format bytes_and_fields
+          bb verify   --scheme ultra_honk --oracle_hash keccak --vk_path ./target/vk --proof_path ./target/proof --public_inputs_path ./target/public_inputs
+          echo "proof verified"

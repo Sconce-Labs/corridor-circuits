@@ -5,9 +5,13 @@ authors = ["Sconce Labs"]
 
 [dependencies]
 # Poseidon2 over BN254. Must match Soroban's `poseidon2_permutation` host
-# function and the SDK (`@zkpassport/poseidon2`) — pinned by `conformance.nr`.
-poseidon = { tag = "v0.3.0", git = "https://github.com/noir-lang/poseidon" }
+# function and the SDK (`@zkpassport/poseidon2`) -- pinned by `conformance.nr`.
+# v0.2.6 (not v0.3.0+): v0.3.0 uses post-beta.9 syntax (`@[]`, 1-arg
+# `poseidon2_permutation`); outputs at arities 1/2/4/5 are pinned identical.
+poseidon = { tag = "v0.2.6", git = "https://github.com/noir-lang/poseidon" }
 # Schnorr over Grumpkin with a Poseidon2 challenge. The issuer signs a
 # credential statement with this scheme; the SDK's signer mirrors the same DST
 # and generator (see corridor-sdk/src/schnorr.ts).
-schnorr = { tag = "v0.4.0", git = "https://github.com/noir-lang/schnorr" }
+# VENDORED v0.4.0 at ../vendor/schnorr: kept on the v0.4.0 scheme (the fixture
+# and SDK pin it) with beta.9 compatibility edits -- see the header there.
+schnorr = { path = "../vendor/schnorr" }
