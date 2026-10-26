@@ -1,12 +1,17 @@
-<!-- Closes #NNN -->
-
 ## What
 
-## Why
+<!-- One or two sentences: what changed and why. Reference the issue:
+     Closes #NNN -->
+
+## How tested
+
+<!-- CI runs the repo gates; note anything extra you ran (commands, fixtures,
+     networks). If you did not run something, say so. -->
 
 ## Checklist
-- [ ] `nargo test` + `nargo execute` + `nargo fmt --check` pass
-- [ ] New constraint has a `should_fail_with` test in `eligibility.nr`
-- [ ] Public-input layout unchanged, or `corridor-contracts/ABI.md` + `corridor-sdk` updated in matching PRs
-- [ ] `Prover.toml` regenerated if the layout changed
-- [ ] `conformance.nr` still green
+
+- [ ] Closes exactly one issue (one issue per PR)
+- [ ] `cargo fmt` / `nargo fmt` / `prettier` (per repo) applied
+- [ ] No trust-assumption change without updating `corridor/ARCHITECTURE.md` §6
+      and the relevant docs
+- [ ] Conventional commit title (`feat:`, `fix:`, `test:`, `docs:`, `chore:`)
